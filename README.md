@@ -1,2 +1,3 @@
 # ringbuffer
-Ring buffer implementation ingo
+
+Ring buffer implementation in go
