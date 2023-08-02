@@ -12,32 +12,29 @@ import (
 type Buffer struct {
 	buf []byte
 
-	condData  *sync.Cond
-	condSpace *sync.Cond
-	closed    bool
-
-	mu          sync.RWMutex
+	mu          sync.Mutex
+	condData    *sync.Cond
+	condSpace   *sync.Cond
 	head, tail  uint16
 	empty, full bool
+	closed      bool
 }
 
 // New creates a new ring buffer.
 func New() *Buffer {
-	return &Buffer{
-		buf:       make([]byte, math.MaxUint16+1),
-		empty:     true,
-		condData:  sync.NewCond(&sync.Mutex{}),
-		condSpace: sync.NewCond(&sync.Mutex{}),
+	b := &Buffer{
+		buf:   make([]byte, math.MaxUint16+1),
+		empty: true,
 	}
+	b.condData = sync.NewCond(&b.mu)
+	b.condSpace = sync.NewCond(&b.mu)
+	return b
 }
 
 // Close closes the buffer.
 func (b *Buffer) Close() error {
-	b.condData.L.Lock()
-	defer b.condData.L.Unlock()
-
-	b.condSpace.L.Lock()
-	defer b.condSpace.L.Unlock()
+	b.mu.Lock()
+	defer b.mu.Unlock()
 
 	b.closed = true
 	b.condData.Signal()
@@ -47,12 +44,9 @@ func (b *Buffer) Close() error {
 
 // Read reads bytes from the buffer.
 func (b *Buffer) Read(p []byte) (int, error) {
-	var head, tail uint16
 	b.condData.L.Lock()
 	for {
-		var empty bool
-		head, tail, empty, _ = b.getState()
-		if !empty {
+		if !b.empty {
 			break
 		}
 
@@ -63,6 +57,9 @@ func (b *Buffer) Read(p []byte) (int, error) {
 
 		b.condData.Wait()
 	}
+
+	head, tail := b.head, b.tail
+
 	b.condData.L.Unlock()
 
 	if len(p) == 0 {
@@ -88,12 +85,9 @@ func (b *Buffer) Read(p []byte) (int, error) {
 func (b *Buffer) WriteTo(w io.Writer) (int64, error) {
 	var nTotal int64
 	for {
-		var head, tail uint16
 		b.condData.L.Lock()
 		for {
-			var empty bool
-			head, tail, empty, _ = b.getState()
-			if !empty {
+			if !b.empty {
 				break
 			}
 
@@ -104,6 +98,9 @@ func (b *Buffer) WriteTo(w io.Writer) (int64, error) {
 
 			b.condData.Wait()
 		}
+
+		head, tail := b.head, b.tail
+
 		b.condData.L.Unlock()
 
 		var n int
@@ -116,10 +113,11 @@ func (b *Buffer) WriteTo(w io.Writer) (int64, error) {
 
 		if n > 0 {
 			nTotal += int64(n)
-			if err != nil {
-				return nTotal, errors.WithStack(err)
-			}
 			b.updatePointersAfterReading(uint16(n))
+		}
+
+		if err != nil {
+			return nTotal, errors.WithStack(err)
 		}
 	}
 }
@@ -128,7 +126,6 @@ func (b *Buffer) WriteTo(w io.Writer) (int64, error) {
 func (b *Buffer) Write(p []byte) (int, error) {
 	var nTotal int
 	for {
-		var head, tail uint16
 		b.condSpace.L.Lock()
 		for {
 			if b.closed {
@@ -136,14 +133,15 @@ func (b *Buffer) Write(p []byte) (int, error) {
 				return nTotal, errors.Wrap(io.ErrClosedPipe, "writing to closed ring buffer")
 			}
 
-			var full bool
-			head, tail, _, full = b.getState()
-			if !full {
+			if !b.full {
 				break
 			}
 
 			b.condSpace.Wait()
 		}
+
+		head, tail := b.head, b.tail
+
 		b.condSpace.L.Unlock()
 
 		if len(p) == 0 {
@@ -174,7 +172,6 @@ func (b *Buffer) Write(p []byte) (int, error) {
 func (b *Buffer) ReadFrom(r io.Reader) (int64, error) {
 	var nTotal int64
 	for {
-		var head, tail uint16
 		b.condSpace.L.Lock()
 		for {
 			if b.closed {
@@ -182,14 +179,15 @@ func (b *Buffer) ReadFrom(r io.Reader) (int64, error) {
 				return nTotal, errors.Wrap(io.ErrClosedPipe, "writing to closed ring buffer")
 			}
 
-			var full bool
-			head, tail, _, full = b.getState()
-			if !full {
+			if !b.full {
 				break
 			}
 
 			b.condSpace.Wait()
 		}
+
+		head, tail := b.head, b.tail
+
 		b.condSpace.L.Unlock()
 
 		var n int
@@ -212,13 +210,6 @@ func (b *Buffer) ReadFrom(r io.Reader) (int64, error) {
 			return nTotal, errors.WithStack(err)
 		}
 	}
-}
-
-func (b *Buffer) getState() (uint16, uint16, bool, bool) {
-	b.mu.RLock()
-	defer b.mu.RUnlock()
-
-	return b.head, b.tail, b.empty, b.full
 }
 
 func (b *Buffer) updatePointersAfterReading(n uint16) {
