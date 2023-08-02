@@ -114,7 +114,7 @@ func (r *reader) Read(d []byte) (int, error) {
 }
 
 func TestReadFrom(t *testing.T) {
-	const capacity = 100 * math.MaxUint16
+	const capacity = 2 * 1024 * math.MaxUint16
 	const readBatchSize = math.MaxUint16 / 5
 	const batchSize = math.MaxUint16 / 3
 
@@ -158,7 +158,7 @@ func TestReadFrom(t *testing.T) {
 }
 
 func TestWriteTo(t *testing.T) {
-	const loops = 500
+	const loops = 8000
 	const batchSize = math.MaxUint16 / 5
 
 	requireT := require.New(t)
