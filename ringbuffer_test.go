@@ -7,6 +7,7 @@ import (
 	"io"
 	"math"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 )
@@ -204,6 +205,124 @@ func TestWriteTo(t *testing.T) {
 	requireT.Equal(data, buff.Bytes())
 }
 
+func TestReadByte(t *testing.T) {
+	const loop = math.MaxUint16
+
+	requireT := require.New(t)
+
+	data := make([]byte, 3)
+	ring := New()
+	for i := 0; i < loop; i++ {
+		_, err := rand.Read(data)
+		requireT.NoError(err)
+
+		n, err := ring.Write(data)
+		requireT.NoError(err)
+		requireT.Equal(len(data), n)
+
+		b, err := ring.ReadByte()
+		requireT.NoError(err)
+		requireT.Equal(data[0], b)
+
+		b, err = ring.ReadByte()
+		requireT.NoError(err)
+		requireT.Equal(data[1], b)
+
+		b, err = ring.ReadByte()
+		requireT.NoError(err)
+		requireT.Equal(data[2], b)
+	}
+}
+
+func TestWriteByte(t *testing.T) {
+	const loop = math.MaxUint16
+
+	requireT := require.New(t)
+
+	data := make([]byte, 3)
+	result := make([]byte, 3)
+	ring := New()
+	for i := 0; i < loop; i++ {
+		_, err := rand.Read(data)
+		requireT.NoError(err)
+
+		requireT.NoError(ring.WriteByte(data[0]))
+		requireT.NoError(ring.WriteByte(data[1]))
+		requireT.NoError(ring.WriteByte(data[2]))
+
+		n, err := ring.Read(result)
+		requireT.NoError(err)
+		requireT.Equal(len(data), n)
+
+		requireT.Equal(data, result)
+	}
+}
+
+func TestSlowReadByte(t *testing.T) {
+	requireT := require.New(t)
+
+	ring := New()
+	_, err := ring.Write(make([]byte, math.MaxUint16+1))
+	requireT.NoError(err)
+
+	data := make([]byte, 10)
+	_, err = rand.Read(data)
+	requireT.NoError(err)
+
+	doneCh := make(chan struct{})
+	go func() {
+		defer close(doneCh)
+
+		for i := 0; i < len(data); i++ {
+			time.Sleep(10 * time.Millisecond)
+			_, err := ring.ReadByte()
+			if err != nil {
+				panic(err)
+			}
+		}
+	}()
+
+	for i := 0; i < len(data); i++ {
+		requireT.NoError(ring.WriteByte(data[i]))
+	}
+	requireT.NoError(ring.Close())
+
+	<-doneCh
+}
+
+func TestSlowWriteByte(t *testing.T) {
+	requireT := require.New(t)
+
+	ring := New()
+
+	data := make([]byte, 10)
+	_, err := rand.Read(data)
+	requireT.NoError(err)
+
+	doneCh := make(chan struct{})
+	go func() {
+		defer close(doneCh)
+
+		for {
+			_, err := ring.ReadByte()
+			if err != nil {
+				if errors.Is(err, io.EOF) {
+					return
+				}
+				panic(err)
+			}
+		}
+	}()
+
+	for i := 0; i < len(data); i++ {
+		time.Sleep(10 * time.Millisecond)
+		requireT.NoError(ring.WriteByte(data[i]))
+	}
+	requireT.NoError(ring.Close())
+
+	<-doneCh
+}
+
 func TestClosedRead(t *testing.T) {
 	requireT := require.New(t)
 
@@ -258,6 +377,25 @@ func TestClosedReadFrom(t *testing.T) {
 	n, err := ring.ReadFrom(buf)
 	requireT.ErrorIs(err, io.ErrClosedPipe)
 	requireT.Equal(int64(0), n)
+}
+
+func TestClosedReadByte(t *testing.T) {
+	requireT := require.New(t)
+
+	ring := New()
+	requireT.NoError(ring.Close())
+	v, err := ring.ReadByte()
+	requireT.ErrorIs(err, io.EOF)
+	requireT.Equal(byte(0x00), v)
+}
+
+func TestClosedWriteByte(t *testing.T) {
+	requireT := require.New(t)
+
+	ring := New()
+	requireT.NoError(ring.Close())
+	err := ring.WriteByte(0x00)
+	requireT.ErrorIs(err, io.ErrClosedPipe)
 }
 
 func TestReadToEmpty(t *testing.T) {
