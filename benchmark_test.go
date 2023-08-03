@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"io"
 	"net"
+	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -45,11 +46,17 @@ func BenchmarkPerByteNative(b *testing.B) {
 	const loops = 1000
 
 	buf := bytes.NewBuffer(make([]byte, loops))
+	mu := sync.Mutex{} // mutex is here to match the fact that ring is a concurrent-safe type
 
 	b.ResetTimer()
 	for i := 0; i < loops; i++ {
+		mu.Lock()
 		_ = buf.WriteByte(0x00)
+		mu.Unlock()
+
+		mu.Lock()
 		_, _ = buf.ReadByte()
+		mu.Unlock()
 	}
 	b.StopTimer()
 }
