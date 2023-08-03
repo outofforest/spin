@@ -76,7 +76,7 @@ func (b *Buffer) Read(p []byte) (int, error) {
 		}
 	}
 
-	b.updatePointersAfterReading(uint16(n))
+	b.updatePointersAfterReading(uint16(n), true)
 
 	return n, nil
 }
@@ -113,7 +113,7 @@ func (b *Buffer) WriteTo(w io.Writer) (int64, error) {
 
 		if n > 0 {
 			nTotal += int64(n)
-			b.updatePointersAfterReading(uint16(n))
+			b.updatePointersAfterReading(uint16(n), true)
 		}
 
 		if err != nil {
@@ -156,7 +156,7 @@ func (b *Buffer) Write(p []byte) (int, error) {
 		}
 
 		nTotal += n
-		b.updatePointersAfterWriting(uint16(n))
+		b.updatePointersAfterWriting(uint16(n), true)
 
 		if n == len(p) {
 			break
@@ -200,7 +200,7 @@ func (b *Buffer) ReadFrom(r io.Reader) (int64, error) {
 
 		if n > 0 {
 			nTotal += int64(n)
-			b.updatePointersAfterWriting(uint16(n))
+			b.updatePointersAfterWriting(uint16(n), true)
 		}
 
 		if err != nil {
@@ -229,10 +229,9 @@ func (b *Buffer) ReadByte() (byte, error) {
 	}
 
 	v := b.buf[b.head]
+	b.updatePointersAfterReading(1, false)
 
 	b.condData.L.Unlock()
-
-	b.updatePointersAfterReading(1)
 
 	return v, nil
 }
@@ -254,36 +253,35 @@ func (b *Buffer) WriteByte(v byte) error {
 	}
 
 	b.buf[b.tail] = v
+	b.updatePointersAfterWriting(1, false)
 
 	b.condSpace.L.Unlock()
-
-	b.updatePointersAfterWriting(1)
 
 	return nil
 }
 
-func (b *Buffer) updatePointersAfterReading(n uint16) {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-
-	b.head += n
-	if b.head == b.tail {
-		b.empty = true
+func (b *Buffer) updatePointersAfterReading(n uint16, lock bool) {
+	if lock {
+		b.mu.Lock()
+		defer b.mu.Unlock()
 	}
 
+	b.head += n
+	b.empty = b.head == b.tail
 	b.full = false
+
 	b.condSpace.Signal()
 }
 
-func (b *Buffer) updatePointersAfterWriting(n uint16) {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-
-	b.tail += n
-	if b.head == b.tail {
-		b.full = true
+func (b *Buffer) updatePointersAfterWriting(n uint16, lock bool) {
+	if lock {
+		b.mu.Lock()
+		defer b.mu.Unlock()
 	}
 
+	b.tail += n
+	b.full = b.head == b.tail
 	b.empty = false
+
 	b.condData.Signal()
 }
