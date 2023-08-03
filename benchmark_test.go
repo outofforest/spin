@@ -1,6 +1,7 @@
 package ringbuffer
 
 import (
+	"bytes"
 	"crypto/rand"
 	"io"
 	"net"
@@ -10,27 +11,21 @@ import (
 )
 
 func BenchmarkCopyNative(b *testing.B) {
-	b.StopTimer()
-
 	const loops = 1000
 
 	data := make([]byte, 10*1024) // 10 KiBs of nothing
 	result := make([]byte, len(data))
 
+	b.ResetTimer()
 	for i := 0; i < loops; i++ {
-		b.StartTimer()
-
 		// We copy twice because in ring buffer you copy to ring buffer and then from read buffer
 		copy(result, data)
 		copy(result, data)
-
-		b.StopTimer()
 	}
+	b.StopTimer()
 }
 
 func BenchmarkCopyRing(b *testing.B) {
-	b.StopTimer()
-
 	const loops = 1000
 
 	data := make([]byte, 10*1024) // 10 KiBs of nothing
@@ -38,19 +33,41 @@ func BenchmarkCopyRing(b *testing.B) {
 
 	ring := New()
 
+	b.ResetTimer()
 	for i := 0; i < loops; i++ {
-		b.StartTimer()
-
 		_, _ = ring.Write(data)
 		_, _ = ring.Read(result)
-
-		b.StopTimer()
 	}
+	b.StopTimer()
+}
+
+func BenchmarkPerByteNative(b *testing.B) {
+	const loops = 1000
+
+	buf := bytes.NewBuffer(make([]byte, loops))
+
+	b.ResetTimer()
+	for i := 0; i < loops; i++ {
+		_ = buf.WriteByte(0x00)
+		_, _ = buf.ReadByte()
+	}
+	b.StopTimer()
+}
+
+func BenchmarkPerByteRing(b *testing.B) {
+	const loops = 1000
+
+	ring := New()
+
+	b.ResetTimer()
+	for i := 0; i < loops; i++ {
+		_ = ring.WriteByte(0x00)
+		_, _ = ring.ReadByte()
+	}
+	b.StopTimer()
 }
 
 func BenchmarkTCPNative(b *testing.B) {
-	b.StopTimer()
-
 	requireT := require.New(b)
 
 	data := make([]byte, 100*1024*1024) // 100 MiBs of nothing
@@ -97,7 +114,7 @@ func BenchmarkTCPNative(b *testing.B) {
 	requireT.NoError(conn.(*net.TCPConn).SetReadBuffer(128 * 1024))
 	requireT.NoError(conn.(*net.TCPConn).SetWriteBuffer(128 * 1024))
 
-	b.StartTimer()
+	b.ResetTimer()
 
 	_, err = conn.Write(data)
 	requireT.NoError(err)
@@ -109,8 +126,6 @@ func BenchmarkTCPNative(b *testing.B) {
 }
 
 func BenchmarkTCPRing(b *testing.B) {
-	b.StopTimer()
-
 	requireT := require.New(b)
 
 	data := make([]byte, 100*1024*1024) // 100 MiBs of nothing
@@ -157,7 +172,7 @@ func BenchmarkTCPRing(b *testing.B) {
 	requireT.NoError(conn.(*net.TCPConn).SetReadBuffer(128 * 1024))
 	requireT.NoError(conn.(*net.TCPConn).SetWriteBuffer(128 * 1024))
 
-	b.StartTimer()
+	b.ResetTimer()
 
 	_, err = conn.Write(data)
 
