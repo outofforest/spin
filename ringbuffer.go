@@ -44,23 +44,10 @@ func (b *Buffer) Close() error {
 
 // Read reads bytes from the buffer.
 func (b *Buffer) Read(p []byte) (int, error) {
-	b.condData.L.Lock()
-	for {
-		if !b.empty {
-			break
-		}
-
-		if b.closed {
-			b.condData.L.Unlock()
-			return 0, errors.Wrap(io.EOF, "ring buffer has been closed and there is no more data to read")
-		}
-
-		b.condData.Wait()
+	head, tail, closed := b.waitBeforeReading(0)
+	if closed {
+		return 0, errors.Wrap(io.EOF, "ring buffer has been closed and there is no more data to read")
 	}
-
-	head, tail := b.head, b.tail
-
-	b.condData.L.Unlock()
 
 	if len(p) == 0 {
 		return 0, nil
@@ -84,26 +71,13 @@ func (b *Buffer) Read(p []byte) (int, error) {
 // WriteTo copies the content of the ring buffer to the provided writer.
 func (b *Buffer) WriteTo(w io.Writer) (int64, error) {
 	var nTotal int64
+	var n int
 	for {
-		b.condData.L.Lock()
-		for {
-			if !b.empty {
-				break
-			}
-
-			if b.closed {
-				b.condData.L.Unlock()
-				return nTotal, nil
-			}
-
-			b.condData.Wait()
+		head, tail, closed := b.waitBeforeReading(uint32(n))
+		if closed {
+			return nTotal, nil
 		}
 
-		head, tail := b.head, b.tail
-
-		b.condData.L.Unlock()
-
-		var n int
 		var err error
 		if head < tail {
 			n, err = w.Write(b.buf[head:tail])
@@ -111,11 +85,7 @@ func (b *Buffer) WriteTo(w io.Writer) (int64, error) {
 			n, err = w.Write(b.buf[head:])
 		}
 
-		if n > 0 {
-			nTotal += int64(n)
-			b.updatePointersAfterReading(uint16(n), true)
-		}
-
+		nTotal += int64(n)
 		if err != nil {
 			return nTotal, errors.WithStack(err)
 		}
@@ -125,30 +95,17 @@ func (b *Buffer) WriteTo(w io.Writer) (int64, error) {
 // Write writes bytes to the ring buffer.
 func (b *Buffer) Write(p []byte) (int, error) {
 	var nTotal int
+	var n int
 	for {
-		b.condSpace.L.Lock()
-		for {
-			if b.closed {
-				b.condSpace.L.Unlock()
-				return nTotal, errors.Wrap(io.ErrClosedPipe, "writing to closed ring buffer")
-			}
-
-			if !b.full {
-				break
-			}
-
-			b.condSpace.Wait()
+		head, tail, closed := b.waitBeforeWriting(uint32(n))
+		if closed {
+			return nTotal, errors.Wrap(io.ErrClosedPipe, "writing to closed ring buffer")
 		}
-
-		head, tail := b.head, b.tail
-
-		b.condSpace.L.Unlock()
 
 		if len(p) == 0 {
 			return 0, nil
 		}
 
-		var n int
 		if tail >= head {
 			n = copy(b.buf[tail:], p)
 		} else {
@@ -156,41 +113,25 @@ func (b *Buffer) Write(p []byte) (int, error) {
 		}
 
 		nTotal += n
-		b.updatePointersAfterWriting(uint16(n), true)
-
 		if n == len(p) {
-			break
+			b.updatePointersAfterWriting(uint16(n), true)
+			return nTotal, nil
 		}
 
 		p = p[n:]
 	}
-
-	return nTotal, nil
 }
 
 // ReadFrom copies the content of the provided reader to the ring buffer.
 func (b *Buffer) ReadFrom(r io.Reader) (int64, error) {
 	var nTotal int64
+	var n int
 	for {
-		b.condSpace.L.Lock()
-		for {
-			if b.closed {
-				b.condSpace.L.Unlock()
-				return nTotal, errors.Wrap(io.ErrClosedPipe, "writing to closed ring buffer")
-			}
-
-			if !b.full {
-				break
-			}
-
-			b.condSpace.Wait()
+		head, tail, closed := b.waitBeforeWriting(uint32(n))
+		if closed {
+			return nTotal, errors.Wrap(io.ErrClosedPipe, "writing to closed ring buffer")
 		}
 
-		head, tail := b.head, b.tail
-
-		b.condSpace.L.Unlock()
-
-		var n int
 		var err error
 		if tail >= head {
 			n, err = r.Read(b.buf[tail:])
@@ -198,11 +139,7 @@ func (b *Buffer) ReadFrom(r io.Reader) (int64, error) {
 			n, err = r.Read(b.buf[tail:head])
 		}
 
-		if n > 0 {
-			nTotal += int64(n)
-			b.updatePointersAfterWriting(uint16(n), true)
-		}
-
+		nTotal += int64(n)
 		if err != nil {
 			if errors.Is(err, io.EOF) {
 				return nTotal, nil
@@ -215,49 +152,83 @@ func (b *Buffer) ReadFrom(r io.Reader) (int64, error) {
 // ReadByte reads one byte from the buffer.
 func (b *Buffer) ReadByte() (byte, error) {
 	b.condData.L.Lock()
+	defer b.condData.L.Unlock()
+
 	for {
 		if !b.empty {
-			break
+			v := b.buf[b.head]
+			b.updatePointersAfterReading(1, false)
+			return v, nil
 		}
 
 		if b.closed {
-			b.condData.L.Unlock()
 			return 0x00, errors.Wrap(io.EOF, "ring buffer has been closed and there is no more data to read")
 		}
 
 		b.condData.Wait()
 	}
-
-	v := b.buf[b.head]
-	b.updatePointersAfterReading(1, false)
-
-	b.condData.L.Unlock()
-
-	return v, nil
 }
 
 // WriteByte writes one byte to the buffer.
 func (b *Buffer) WriteByte(v byte) error {
 	b.condSpace.L.Lock()
+	defer b.condSpace.L.Unlock()
+
 	for {
 		if b.closed {
-			b.condSpace.L.Unlock()
 			return errors.Wrap(io.ErrClosedPipe, "writing to closed ring buffer")
 		}
 
 		if !b.full {
-			break
+			b.buf[b.tail] = v
+			b.updatePointersAfterWriting(1, false)
+			return nil
 		}
 
 		b.condSpace.Wait()
 	}
+}
 
-	b.buf[b.tail] = v
-	b.updatePointersAfterWriting(1, false)
+func (b *Buffer) waitBeforeReading(n uint32) (uint16, uint16, bool) {
+	b.condData.L.Lock()
+	defer b.condData.L.Unlock()
 
-	b.condSpace.L.Unlock()
+	if n > 0 {
+		b.updatePointersAfterReading(uint16(n), false)
+	}
 
-	return nil
+	for {
+		if !b.empty {
+			return b.head, b.tail, false
+		}
+
+		if b.closed {
+			return 0, 0, true
+		}
+
+		b.condData.Wait()
+	}
+}
+
+func (b *Buffer) waitBeforeWriting(n uint32) (uint16, uint16, bool) {
+	b.condSpace.L.Lock()
+	defer b.condSpace.L.Unlock()
+
+	if n > 0 {
+		b.updatePointersAfterWriting(uint16(n), false)
+	}
+
+	for {
+		if b.closed {
+			return 0, 0, true
+		}
+
+		if !b.full {
+			return b.head, b.tail, false
+		}
+
+		b.condSpace.Wait()
+	}
 }
 
 func (b *Buffer) updatePointersAfterReading(n uint16, lock bool) {
