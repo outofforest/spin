@@ -212,6 +212,56 @@ func (b *Buffer) ReadFrom(r io.Reader) (int64, error) {
 	}
 }
 
+// ReadByte reads one byte from the buffer.
+func (b *Buffer) ReadByte() (byte, error) {
+	b.condData.L.Lock()
+	for {
+		if !b.empty {
+			break
+		}
+
+		if b.closed {
+			b.condData.L.Unlock()
+			return 0x00, errors.Wrap(io.EOF, "ring buffer has been closed and there is no more data to read")
+		}
+
+		b.condData.Wait()
+	}
+
+	v := b.buf[b.head]
+
+	b.condData.L.Unlock()
+
+	b.updatePointersAfterReading(1)
+
+	return v, nil
+}
+
+// WriteByte writes one byte to the buffer.
+func (b *Buffer) WriteByte(v byte) error {
+	b.condSpace.L.Lock()
+	for {
+		if b.closed {
+			b.condSpace.L.Unlock()
+			return errors.Wrap(io.ErrClosedPipe, "writing to closed ring buffer")
+		}
+
+		if !b.full {
+			break
+		}
+
+		b.condSpace.Wait()
+	}
+
+	b.buf[b.tail] = v
+
+	b.condSpace.L.Unlock()
+
+	b.updatePointersAfterWriting(1)
+
+	return nil
+}
+
 func (b *Buffer) updatePointersAfterReading(n uint16) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
