@@ -74,6 +74,24 @@ func BenchmarkPerByteRing(b *testing.B) {
 	b.StopTimer()
 }
 
+func BenchmarkIterator(b *testing.B) {
+	const loops = 1000
+	const count = 3
+
+	requireT := require.New(b)
+
+	ring := New()
+	_, err := ring.Write(make([]byte, count*loops))
+	requireT.NoError(err)
+	requireT.NoError(ring.Close())
+
+	b.ResetTimer()
+	_, _ = ring.Iterate(func(p []byte) (int, bool, error) {
+		return count, true, nil
+	})
+	b.StopTimer()
+}
+
 func BenchmarkTCPNative(b *testing.B) {
 	requireT := require.New(b)
 

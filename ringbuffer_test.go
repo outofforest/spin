@@ -205,6 +205,90 @@ func TestWriteTo(t *testing.T) {
 	requireT.Equal(data, buff.Bytes())
 }
 
+func TestIterateFull(t *testing.T) {
+	const loops = 8000
+	const batchSize = math.MaxUint16 / 5
+
+	requireT := require.New(t)
+
+	data := make([]byte, loops*batchSize)
+	_, err := rand.Read(data)
+	requireT.NoError(err)
+
+	result := make([]byte, 0, len(data))
+
+	ring := New()
+
+	errCh := make(chan error, 1)
+	var n int64
+	go func() {
+		var err error
+		n, err = ring.Iterate(func(b []byte) (int, bool, error) {
+			result = append(result, b...)
+			return len(b), true, nil
+		})
+		errCh <- err
+	}()
+
+	n2, err := ring.Write(data)
+	requireT.NoError(err)
+	requireT.Equal(len(data), n2)
+	requireT.NoError(ring.Close())
+
+	err = <-errCh
+
+	requireT.ErrorIs(err, io.EOF)
+	requireT.Equal(int64(len(data)), n)
+	requireT.Equal(data, result)
+}
+
+func TestIteratePartial(t *testing.T) {
+	const loops = 8000
+	const batchSize = math.MaxUint16 / 5
+
+	requireT := require.New(t)
+
+	data := make([]byte, 0, loops*batchSize)
+	result := make([]byte, 0, loops*batchSize)
+
+	ring := New()
+	buf := make([]byte, batchSize)
+	for i := 0; i < loops; i++ {
+		_, err := rand.Read(buf)
+		requireT.NoError(err)
+
+		_, err = ring.Write(buf)
+		requireT.NoError(err)
+
+		data = append(data, buf...)
+
+		n, err := ring.Iterate(func(p []byte) (int, bool, error) {
+			result = append(result, p[0])
+			return 1, false, nil
+		})
+		requireT.NoError(err)
+		requireT.Equal(int64(1), n)
+
+		n, err = ring.Iterate(func(p []byte) (int, bool, error) {
+			result = append(result, p...)
+			return len(p), false, nil
+		})
+		requireT.NoError(err)
+		if n < int64(len(buf)-1) {
+			n2, err := ring.Iterate(func(p []byte) (int, bool, error) {
+				result = append(result, p...)
+				return len(p), false, nil
+			})
+			requireT.NoError(err)
+			n += n2
+		}
+		requireT.Equal(int64(len(buf)-1), n)
+	}
+
+	requireT.NoError(ring.Close())
+	requireT.Equal(data, result)
+}
+
 func TestReadByte(t *testing.T) {
 	const loop = math.MaxUint16
 
@@ -398,6 +482,21 @@ func TestClosedWriteByte(t *testing.T) {
 	requireT.ErrorIs(err, io.ErrClosedPipe)
 }
 
+func TestClosedIterate(t *testing.T) {
+	requireT := require.New(t)
+
+	ring := New()
+	requireT.NoError(ring.Close())
+	run := false
+	n, err := ring.Iterate(func(b []byte) (int, bool, error) {
+		run = true
+		return len(b), true, nil
+	})
+	requireT.ErrorIs(err, io.EOF)
+	requireT.Equal(false, run)
+	requireT.Equal(int64(0), n)
+}
+
 func TestReadToEmpty(t *testing.T) {
 	requireT := require.New(t)
 
@@ -452,4 +551,18 @@ func TestWriteToWithError(t *testing.T) {
 	n2, err := ring.WriteTo(errReaderWriter{})
 	requireT.ErrorIs(err, errTest)
 	requireT.Equal(int64(10), n2)
+}
+
+func TestIterateWithError(t *testing.T) {
+	requireT := require.New(t)
+
+	ring := New()
+	_, err := ring.Write([]byte{0x00})
+	requireT.NoError(err)
+
+	n, err := ring.Iterate(func(p []byte) (int, bool, error) {
+		return 1, true, errTest
+	})
+	requireT.ErrorIs(err, errTest)
+	requireT.Equal(int64(1), n)
 }
