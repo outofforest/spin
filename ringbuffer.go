@@ -195,6 +195,9 @@ func (b *Buffer) WriteByte(v byte) error {
 	}
 }
 
+// Iterate implements iterator over available data.
+// It makes all the available data to the iterator, then it should say how many bytes has been used
+// and if iterator is interested in receiving more data.
 func (b *Buffer) Iterate(f func(p []byte) (int, bool, error)) (int64, error) {
 	var nTotal int64
 	var n int
