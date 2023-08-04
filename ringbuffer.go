@@ -72,13 +72,15 @@ func (b *Buffer) Read(p []byte) (int, error) {
 func (b *Buffer) WriteTo(w io.Writer) (int64, error) {
 	var nTotal int64
 	var n int
+	var head, tail uint16
+	var closed bool
+	var err error
 	for {
-		head, tail, closed := b.waitBeforeReading(n)
+		head, tail, closed = b.waitBeforeReading(n)
 		if closed {
 			return nTotal, nil
 		}
 
-		var err error
 		if head < tail {
 			n, err = w.Write(b.buf[head:tail])
 		} else {
@@ -96,8 +98,10 @@ func (b *Buffer) WriteTo(w io.Writer) (int64, error) {
 func (b *Buffer) Write(p []byte) (int, error) {
 	var nTotal int
 	var n int
+	var head, tail uint16
+	var closed bool
 	for {
-		head, tail, closed := b.waitBeforeWriting(n)
+		head, tail, closed = b.waitBeforeWriting(n)
 		if closed {
 			return nTotal, errors.Wrap(io.ErrClosedPipe, "writing to closed ring buffer")
 		}
@@ -126,13 +130,15 @@ func (b *Buffer) Write(p []byte) (int, error) {
 func (b *Buffer) ReadFrom(r io.Reader) (int64, error) {
 	var nTotal int64
 	var n int
+	var head, tail uint16
+	var closed bool
+	var err error
 	for {
-		head, tail, closed := b.waitBeforeWriting(n)
+		head, tail, closed = b.waitBeforeWriting(n)
 		if closed {
 			return nTotal, errors.Wrap(io.ErrClosedPipe, "writing to closed ring buffer")
 		}
 
-		var err error
 		if tail >= head {
 			n, err = r.Read(b.buf[tail:])
 		} else {
@@ -186,6 +192,37 @@ func (b *Buffer) WriteByte(v byte) error {
 		}
 
 		b.condSpace.Wait()
+	}
+}
+
+func (b *Buffer) Iterate(f func(p []byte) (int, bool, error)) (int64, error) {
+	var nTotal int64
+	var n int
+	var head, tail uint16
+	var more, closed bool
+	var err error
+	for {
+		head, tail, closed = b.waitBeforeReading(n)
+		if closed {
+			return nTotal, io.EOF
+		}
+
+		if head < tail {
+			n, more, err = f(b.buf[head:tail])
+		} else {
+			n, more, err = f(b.buf[head:])
+		}
+
+		nTotal += int64(n)
+		if err != nil {
+			return nTotal, errors.WithStack(err)
+		}
+		if !more {
+			if n > 0 {
+				b.updatePointersAfterReading(uint16(n), true)
+			}
+			return nTotal, nil
+		}
 	}
 }
 
