@@ -98,8 +98,8 @@ func BenchmarkTCPNative(b *testing.B) {
 		}
 
 		_ = conn.(*net.TCPConn).SetNoDelay(true)
-		_ = conn.(*net.TCPConn).SetReadBuffer(128 * 1024)
-		_ = conn.(*net.TCPConn).SetWriteBuffer(128 * 1024)
+		_ = conn.(*net.TCPConn).SetReadBuffer(32 * 1024)
+		_ = conn.(*net.TCPConn).SetWriteBuffer(32 * 1024)
 
 		total := 0
 		for {
@@ -163,8 +163,8 @@ func BenchmarkTCPRing(b *testing.B) {
 		}
 
 		_ = conn.(*net.TCPConn).SetNoDelay(true)
-		_ = conn.(*net.TCPConn).SetReadBuffer(128 * 1024)
-		_ = conn.(*net.TCPConn).SetWriteBuffer(128 * 1024)
+		_ = conn.(*net.TCPConn).SetReadBuffer(32 * 1024)
+		_ = conn.(*net.TCPConn).SetWriteBuffer(32 * 1024)
 
 		_, err = ring.ReadFrom(conn)
 		_ = ring.Close()
