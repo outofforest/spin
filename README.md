@@ -1,3 +1,3 @@
-# ringbuffer
+# spin
 
 Ring buffer implementation in go
