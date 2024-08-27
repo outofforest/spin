@@ -57,7 +57,7 @@ func TestPartialWriteAndRead(t *testing.T) {
 
 	t.Logf("Write, head: %d, tail: %d", ring.head, ring.tail)
 
-	for i := 1; i < loops; i++ {
+	for range loops {
 		n, err := rand.Read(in)
 		requireT.NoError(err)
 		requireT.Equal(len(in), n)
@@ -177,7 +177,7 @@ func TestWriteTo(t *testing.T) {
 		}()
 
 		buff := make([]byte, batchSize)
-		for i := 0; i < loops; i++ {
+		for range loops {
 			_, err := rand.Read(buff)
 			if err != nil {
 				errCh <- err
@@ -253,7 +253,7 @@ func TestIteratePartial(t *testing.T) {
 
 	ring := New()
 	buf := make([]byte, batchSize)
-	for i := 0; i < loops; i++ {
+	for range loops {
 		_, err := rand.Read(buf)
 		requireT.NoError(err)
 
@@ -296,7 +296,7 @@ func TestReadByte(t *testing.T) {
 
 	data := make([]byte, 3)
 	ring := New()
-	for i := 0; i < loop; i++ {
+	for range loop {
 		_, err := rand.Read(data)
 		requireT.NoError(err)
 
@@ -326,7 +326,7 @@ func TestWriteByte(t *testing.T) {
 	data := make([]byte, 3)
 	result := make([]byte, 3)
 	ring := New()
-	for i := 0; i < loop; i++ {
+	for range loop {
 		_, err := rand.Read(data)
 		requireT.NoError(err)
 
@@ -357,7 +357,7 @@ func TestSlowReadByte(t *testing.T) {
 	go func() {
 		defer close(doneCh)
 
-		for i := 0; i < len(data); i++ {
+		for range len(data) {
 			time.Sleep(10 * time.Millisecond)
 			_, err := ring.ReadByte()
 			if err != nil {
@@ -366,8 +366,8 @@ func TestSlowReadByte(t *testing.T) {
 		}
 	}()
 
-	for i := 0; i < len(data); i++ {
-		requireT.NoError(ring.WriteByte(data[i]))
+	for _, b := range data {
+		requireT.NoError(ring.WriteByte(b))
 	}
 	requireT.NoError(ring.Close())
 
@@ -398,9 +398,9 @@ func TestSlowWriteByte(t *testing.T) {
 		}
 	}()
 
-	for i := 0; i < len(data); i++ {
+	for _, b := range data {
 		time.Sleep(10 * time.Millisecond)
-		requireT.NoError(ring.WriteByte(data[i]))
+		requireT.NoError(ring.WriteByte(b))
 	}
 	requireT.NoError(ring.Close())
 
@@ -493,7 +493,7 @@ func TestClosedIterate(t *testing.T) {
 		return len(b), true, nil
 	})
 	requireT.ErrorIs(err, io.EOF)
-	requireT.Equal(false, run)
+	requireT.False(run)
 	requireT.Equal(int64(0), n)
 }
 

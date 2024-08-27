@@ -20,12 +20,12 @@ func BenchmarkCopyNative(b *testing.B) {
 
 	const loops = 1000
 
-	for bi := 0; bi < b.N; bi++ {
+	for range b.N {
 		data := make([]byte, 10*1024) // 10 KiBs of nothing
 		result := make([]byte, len(data))
 
 		b.StartTimer()
-		for i := 0; i < loops; i++ {
+		for range loops {
 			// We copy twice because in ring buffer you copy to ring buffer and then from read buffer
 			copy(result, data)
 			copy(result, data)
@@ -40,14 +40,14 @@ func BenchmarkCopyRing(b *testing.B) {
 
 	const loops = 1000
 
-	for bi := 0; bi < b.N; bi++ {
+	for range b.N {
 		data := make([]byte, 10*1024) // 10 KiBs of nothing
 		result := make([]byte, len(data))
 
 		ring := New()
 
 		b.StartTimer()
-		for i := 0; i < loops; i++ {
+		for range loops {
 			_, _ = ring.Write(data)
 			_, _ = ring.Read(result)
 		}
@@ -61,12 +61,12 @@ func BenchmarkPerByteNative(b *testing.B) {
 
 	const loops = 1000
 
-	for bi := 0; bi < b.N; bi++ {
+	for range b.N {
 		buf := bytes.NewBuffer(make([]byte, loops))
 		mu := sync.Mutex{} // mutex is here to match the fact that ring is a concurrent-safe type
 
 		b.StartTimer()
-		for i := 0; i < loops; i++ {
+		for range loops {
 			mu.Lock()
 			_ = buf.WriteByte(0x00)
 			mu.Unlock()
@@ -85,11 +85,11 @@ func BenchmarkPerByteRing(b *testing.B) {
 
 	const loops = 1000
 
-	for bi := 0; bi < b.N; bi++ {
+	for range b.N {
 		ring := New()
 
 		b.StartTimer()
-		for i := 0; i < loops; i++ {
+		for range loops {
 			_ = ring.WriteByte(0x00)
 			_, _ = ring.ReadByte()
 		}
@@ -101,7 +101,7 @@ func BenchmarkIterator(b *testing.B) {
 	b.StopTimer()
 	b.ResetTimer()
 
-	for bi := 0; bi < b.N; bi++ {
+	for range b.N {
 		const loops = 1000
 		const count = 3
 
@@ -126,7 +126,7 @@ func BenchmarkTCPNative(b *testing.B) {
 
 	requireT := require.New(b)
 
-	for bi := 0; bi < b.N; bi++ {
+	for range b.N {
 		data := make([]byte, 100*1024*1024) // 100 MiBs of nothing
 		_, err := rand.Read(data)
 		requireT.NoError(err)
@@ -189,7 +189,7 @@ func BenchmarkTCPRing(b *testing.B) {
 
 	requireT := require.New(b)
 
-	for bi := 0; bi < b.N; bi++ {
+	for range b.N {
 		data := make([]byte, 100*1024*1024) // 100 MiBs of nothing
 		_, err := rand.Read(data)
 		requireT.NoError(err)
