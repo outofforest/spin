@@ -12,7 +12,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestFullWriteAndRead(t *testing.T) {
+func TestBufferFullWriteAndRead(t *testing.T) {
 	requireT := require.New(t)
 
 	data := make([]byte, math.MaxUint16)
@@ -33,7 +33,7 @@ func TestFullWriteAndRead(t *testing.T) {
 	requireT.Equal(data, data2)
 }
 
-func TestPartialWriteAndRead(t *testing.T) {
+func TestBufferPartialWriteAndRead(t *testing.T) {
 	const loops = 1000
 	const batchSize = math.MaxUint16 / 3
 
@@ -114,7 +114,7 @@ func (r *reader) Read(d []byte) (int, error) {
 	return n, nil
 }
 
-func TestReadFrom(t *testing.T) {
+func TestBufferReadFrom(t *testing.T) {
 	const capacity = 2 * 1024 * math.MaxUint16
 	const readBatchSize = math.MaxUint16 / 5
 	const batchSize = math.MaxUint16 / 3
@@ -158,7 +158,7 @@ func TestReadFrom(t *testing.T) {
 	requireT.Equal(data, data2)
 }
 
-func TestWriteTo(t *testing.T) {
+func TestBufferWriteTo(t *testing.T) {
 	const loops = 8000
 	const batchSize = math.MaxUint16 / 5
 
@@ -205,7 +205,7 @@ func TestWriteTo(t *testing.T) {
 	requireT.Equal(data, buff.Bytes())
 }
 
-func TestIterateFull(t *testing.T) {
+func TestBufferIterateFull(t *testing.T) {
 	const loops = 8000
 	const batchSize = math.MaxUint16 / 5
 
@@ -242,7 +242,7 @@ func TestIterateFull(t *testing.T) {
 	requireT.Equal(data, result)
 }
 
-func TestIteratePartial(t *testing.T) {
+func TestBufferIteratePartial(t *testing.T) {
 	const loops = 8000
 	const batchSize = math.MaxUint16 / 5
 
@@ -289,7 +289,7 @@ func TestIteratePartial(t *testing.T) {
 	requireT.Equal(data, result)
 }
 
-func TestReadByte(t *testing.T) {
+func TestBufferReadByte(t *testing.T) {
 	const loop = math.MaxUint16
 
 	requireT := require.New(t)
@@ -318,7 +318,7 @@ func TestReadByte(t *testing.T) {
 	}
 }
 
-func TestWriteByte(t *testing.T) {
+func TestBufferWriteByte(t *testing.T) {
 	const loop = math.MaxUint16
 
 	requireT := require.New(t)
@@ -342,7 +342,7 @@ func TestWriteByte(t *testing.T) {
 	}
 }
 
-func TestSlowReadByte(t *testing.T) {
+func TestBufferSlowReadByte(t *testing.T) {
 	requireT := require.New(t)
 
 	ring := NewBuffer()
@@ -374,7 +374,7 @@ func TestSlowReadByte(t *testing.T) {
 	<-doneCh
 }
 
-func TestSlowWriteByte(t *testing.T) {
+func TestBufferSlowWriteByte(t *testing.T) {
 	requireT := require.New(t)
 
 	ring := NewBuffer()
@@ -407,7 +407,7 @@ func TestSlowWriteByte(t *testing.T) {
 	<-doneCh
 }
 
-func TestClosedRead(t *testing.T) {
+func TestBufferClosedRead(t *testing.T) {
 	requireT := require.New(t)
 
 	ring := NewBuffer()
@@ -423,7 +423,7 @@ func TestClosedRead(t *testing.T) {
 	requireT.Equal(0, n)
 }
 
-func TestClosedWriteTo(t *testing.T) {
+func TestBufferClosedWriteTo(t *testing.T) {
 	requireT := require.New(t)
 
 	buf := &bytes.Buffer{}
@@ -435,7 +435,7 @@ func TestClosedWriteTo(t *testing.T) {
 	requireT.Equal(int64(0), n)
 }
 
-func TestClosedWrite(t *testing.T) {
+func TestBufferClosedWrite(t *testing.T) {
 	requireT := require.New(t)
 
 	ring := NewBuffer()
@@ -451,7 +451,7 @@ func TestClosedWrite(t *testing.T) {
 	requireT.Equal(0, n)
 }
 
-func TestClosedReadFrom(t *testing.T) {
+func TestBufferClosedReadFrom(t *testing.T) {
 	requireT := require.New(t)
 
 	buf := bytes.NewBuffer(make([]byte, 1))
@@ -463,7 +463,7 @@ func TestClosedReadFrom(t *testing.T) {
 	requireT.Equal(int64(0), n)
 }
 
-func TestClosedReadByte(t *testing.T) {
+func TestBufferClosedReadByte(t *testing.T) {
 	requireT := require.New(t)
 
 	ring := NewBuffer()
@@ -473,7 +473,7 @@ func TestClosedReadByte(t *testing.T) {
 	requireT.Equal(byte(0x00), v)
 }
 
-func TestClosedWriteByte(t *testing.T) {
+func TestBufferClosedWriteByte(t *testing.T) {
 	requireT := require.New(t)
 
 	ring := NewBuffer()
@@ -482,7 +482,7 @@ func TestClosedWriteByte(t *testing.T) {
 	requireT.ErrorIs(err, io.ErrClosedPipe)
 }
 
-func TestClosedIterate(t *testing.T) {
+func TestBufferClosedIterate(t *testing.T) {
 	requireT := require.New(t)
 
 	ring := NewBuffer()
@@ -497,7 +497,7 @@ func TestClosedIterate(t *testing.T) {
 	requireT.Equal(int64(0), n)
 }
 
-func TestReadToEmpty(t *testing.T) {
+func TestBufferReadToEmpty(t *testing.T) {
 	requireT := require.New(t)
 
 	ring := NewBuffer()
@@ -510,7 +510,7 @@ func TestReadToEmpty(t *testing.T) {
 	requireT.Equal(0, n)
 }
 
-func TestWriteFromEmpty(t *testing.T) {
+func TestBufferWriteFromEmpty(t *testing.T) {
 	requireT := require.New(t)
 
 	ring := NewBuffer()
