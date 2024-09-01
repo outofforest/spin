@@ -8,6 +8,17 @@ import (
 	"github.com/pkg/errors"
 )
 
+// NewBuffer creates a new ring buffer.
+func NewBuffer() *Buffer {
+	b := &Buffer{
+		buf:   make([]byte, math.MaxUint16+1),
+		empty: true,
+	}
+	b.condData = sync.NewCond(&b.mu)
+	b.condSpace = sync.NewCond(&b.mu)
+	return b
+}
+
 // Buffer is the ring buffer implementation.
 type Buffer struct {
 	buf []byte
@@ -18,17 +29,6 @@ type Buffer struct {
 	head, tail  uint16
 	empty, full bool
 	closed      bool
-}
-
-// New creates a new ring buffer.
-func New() *Buffer {
-	b := &Buffer{
-		buf:   make([]byte, math.MaxUint16+1),
-		empty: true,
-	}
-	b.condData = sync.NewCond(&b.mu)
-	b.condSpace = sync.NewCond(&b.mu)
-	return b
 }
 
 // Close closes the buffer.
@@ -63,7 +63,7 @@ func (b *Buffer) Read(p []byte) (int, error) {
 		}
 	}
 
-	b.updatePointersAfterReading(uint16(n), true)
+	b.updatePointersAfterReadingWithLock(uint16(n))
 
 	return n, nil
 }
@@ -118,7 +118,7 @@ func (b *Buffer) Write(p []byte) (int, error) {
 
 		nTotal += n
 		if n == len(p) {
-			b.updatePointersAfterWriting(uint16(n), true)
+			b.updatePointersAfterWritingWithLock(uint16(n))
 			return nTotal, nil
 		}
 
@@ -163,7 +163,7 @@ func (b *Buffer) ReadByte() (byte, error) {
 	for {
 		if !b.empty {
 			v := b.buf[b.head]
-			b.updatePointersAfterReading(1, false)
+			b.updatePointersAfterReading(1)
 			return v, nil
 		}
 
@@ -187,7 +187,7 @@ func (b *Buffer) WriteByte(v byte) error {
 
 		if !b.full {
 			b.buf[b.tail] = v
-			b.updatePointersAfterWriting(1, false)
+			b.updatePointersAfterWriting(1)
 			return nil
 		}
 
@@ -222,7 +222,7 @@ func (b *Buffer) Iterate(f func(p []byte) (int, bool, error)) (int64, error) {
 		}
 		if !more {
 			if n > 0 {
-				b.updatePointersAfterReading(uint16(n), true)
+				b.updatePointersAfterReadingWithLock(uint16(n))
 			}
 			return nTotal, nil
 		}
@@ -234,7 +234,7 @@ func (b *Buffer) waitBeforeReading(n int) (uint16, uint16, bool) {
 	defer b.condData.L.Unlock()
 
 	if n > 0 {
-		b.updatePointersAfterReading(uint16(n), false)
+		b.updatePointersAfterReading(uint16(n))
 	}
 
 	for {
@@ -255,7 +255,7 @@ func (b *Buffer) waitBeforeWriting(n int) (uint16, uint16, bool) {
 	defer b.condSpace.L.Unlock()
 
 	if n > 0 {
-		b.updatePointersAfterWriting(uint16(n), false)
+		b.updatePointersAfterWriting(uint16(n))
 	}
 
 	for {
@@ -271,12 +271,14 @@ func (b *Buffer) waitBeforeWriting(n int) (uint16, uint16, bool) {
 	}
 }
 
-func (b *Buffer) updatePointersAfterReading(n uint16, lock bool) {
-	if lock {
-		b.mu.Lock()
-		defer b.mu.Unlock()
-	}
+func (b *Buffer) updatePointersAfterReadingWithLock(n uint16) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
 
+	b.updatePointersAfterReading(n)
+}
+
+func (b *Buffer) updatePointersAfterReading(n uint16) {
 	b.head += n
 	b.empty = b.head == b.tail
 
@@ -286,12 +288,14 @@ func (b *Buffer) updatePointersAfterReading(n uint16, lock bool) {
 	}
 }
 
-func (b *Buffer) updatePointersAfterWriting(n uint16, lock bool) {
-	if lock {
-		b.mu.Lock()
-		defer b.mu.Unlock()
-	}
+func (b *Buffer) updatePointersAfterWritingWithLock(n uint16) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
 
+	b.updatePointersAfterWriting(n)
+}
+
+func (b *Buffer) updatePointersAfterWriting(n uint16) {
 	b.tail += n
 	b.full = b.head == b.tail
 
