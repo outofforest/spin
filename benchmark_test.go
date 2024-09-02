@@ -3,9 +3,7 @@ package spin
 import (
 	"bytes"
 	"crypto/rand"
-	"fmt"
 	"io"
-	"math"
 	"net"
 	"sync"
 	"testing"
@@ -16,7 +14,7 @@ import (
 // go test -bench=. -run=^$ -cpuprofile profile.out
 // go tool pprof -http="localhost:8000" pprofbin ./profile.out
 
-func BenchmarkBufferCopyNative(b *testing.B) {
+func BenchmarkCopyNative(b *testing.B) {
 	b.StopTimer()
 	b.ResetTimer()
 
@@ -36,7 +34,7 @@ func BenchmarkBufferCopyNative(b *testing.B) {
 	}
 }
 
-func BenchmarkBufferCopyRing(b *testing.B) {
+func BenchmarkCopyRing(b *testing.B) {
 	b.StopTimer()
 	b.ResetTimer()
 
@@ -57,7 +55,7 @@ func BenchmarkBufferCopyRing(b *testing.B) {
 	}
 }
 
-func BenchmarkBufferPerByteNative(b *testing.B) {
+func BenchmarkPerByteNative(b *testing.B) {
 	b.StopTimer()
 	b.ResetTimer()
 
@@ -81,7 +79,7 @@ func BenchmarkBufferPerByteNative(b *testing.B) {
 	}
 }
 
-func BenchmarkBufferPerByteRing(b *testing.B) {
+func BenchmarkPerByteRing(b *testing.B) {
 	b.StopTimer()
 	b.ResetTimer()
 
@@ -99,7 +97,7 @@ func BenchmarkBufferPerByteRing(b *testing.B) {
 	}
 }
 
-func BenchmarkBufferIterator(b *testing.B) {
+func BenchmarkIterator(b *testing.B) {
 	b.StopTimer()
 	b.ResetTimer()
 
@@ -122,7 +120,7 @@ func BenchmarkBufferIterator(b *testing.B) {
 	}
 }
 
-func BenchmarkBufferTCPNative(b *testing.B) {
+func BenchmarkTCPNative(b *testing.B) {
 	b.StopTimer()
 	b.ResetTimer()
 
@@ -185,7 +183,7 @@ func BenchmarkBufferTCPNative(b *testing.B) {
 	}
 }
 
-func BenchmarkBufferTCPRing(b *testing.B) {
+func BenchmarkTCPRing(b *testing.B) {
 	b.StopTimer()
 	b.ResetTimer()
 
@@ -249,40 +247,4 @@ func BenchmarkBufferTCPRing(b *testing.B) {
 
 		<-done2Ch
 	}
-}
-
-func BenchmarkQueueChannels(b *testing.B) {
-	b.StopTimer()
-	b.ResetTimer()
-
-	var item int
-
-	ch := make(chan int, math.MaxUint16)
-
-	b.StartTimer()
-	for i := range b.N {
-		ch <- i
-		item = <-ch
-	}
-	b.StopTimer()
-
-	_, _ = fmt.Fprint(io.Discard, item)
-}
-
-func BenchmarkQueueRing(b *testing.B) {
-	b.StopTimer()
-	b.ResetTimer()
-
-	var item int
-
-	queue := NewQueue[int]()
-
-	b.StartTimer()
-	for i := range b.N {
-		_ = queue.Enqueue(i)
-		item, _ = queue.Dequeue()
-	}
-	b.StopTimer()
-
-	_, _ = fmt.Fprint(io.Discard, item)
 }
