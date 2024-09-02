@@ -8,8 +8,8 @@ import (
 	"github.com/pkg/errors"
 )
 
-// NewBuffer creates a new ring buffer.
-func NewBuffer() *Buffer {
+// New creates a new ring buffer.
+func New() *Buffer {
 	b := &Buffer{
 		buf:   make([]byte, math.MaxUint16+1),
 		empty: true,
