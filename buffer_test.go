@@ -20,7 +20,7 @@ func TestFullWriteAndRead(t *testing.T) {
 	requireT.NoError(err)
 	requireT.Equal(math.MaxUint16, n)
 
-	ring := NewBuffer()
+	ring := New()
 	n, err = ring.Write(data)
 	requireT.NoError(err)
 	requireT.Equal(math.MaxUint16, n)
@@ -50,7 +50,7 @@ func TestPartialWriteAndRead(t *testing.T) {
 
 	data = append(data, in...)
 
-	ring := NewBuffer()
+	ring := New()
 	n, err = ring.Write(in)
 	requireT.NoError(err)
 	requireT.Equal(len(in), n)
@@ -126,7 +126,7 @@ func TestReadFrom(t *testing.T) {
 	_, err := rand.Read(data)
 	requireT.NoError(err)
 
-	ring := NewBuffer()
+	ring := New()
 
 	errCh := make(chan error, 1)
 	data2 := make([]byte, 0, capacity)
@@ -164,7 +164,7 @@ func TestWriteTo(t *testing.T) {
 
 	requireT := require.New(t)
 
-	ring := NewBuffer()
+	ring := New()
 
 	errCh := make(chan error, 1)
 	data := make([]byte, 0, loops*batchSize)
@@ -217,7 +217,7 @@ func TestIterateFull(t *testing.T) {
 
 	result := make([]byte, 0, len(data))
 
-	ring := NewBuffer()
+	ring := New()
 
 	errCh := make(chan error, 1)
 	var n int64
@@ -251,7 +251,7 @@ func TestIteratePartial(t *testing.T) {
 	data := make([]byte, 0, loops*batchSize)
 	result := make([]byte, 0, loops*batchSize)
 
-	ring := NewBuffer()
+	ring := New()
 	buf := make([]byte, batchSize)
 	for range loops {
 		_, err := rand.Read(buf)
@@ -295,7 +295,7 @@ func TestReadByte(t *testing.T) {
 	requireT := require.New(t)
 
 	data := make([]byte, 3)
-	ring := NewBuffer()
+	ring := New()
 	for range loop {
 		_, err := rand.Read(data)
 		requireT.NoError(err)
@@ -325,7 +325,7 @@ func TestWriteByte(t *testing.T) {
 
 	data := make([]byte, 3)
 	result := make([]byte, 3)
-	ring := NewBuffer()
+	ring := New()
 	for range loop {
 		_, err := rand.Read(data)
 		requireT.NoError(err)
@@ -345,7 +345,7 @@ func TestWriteByte(t *testing.T) {
 func TestSlowReadByte(t *testing.T) {
 	requireT := require.New(t)
 
-	ring := NewBuffer()
+	ring := New()
 	_, err := ring.Write(make([]byte, math.MaxUint16+1))
 	requireT.NoError(err)
 
@@ -377,7 +377,7 @@ func TestSlowReadByte(t *testing.T) {
 func TestSlowWriteByte(t *testing.T) {
 	requireT := require.New(t)
 
-	ring := NewBuffer()
+	ring := New()
 
 	data := make([]byte, 10)
 	_, err := rand.Read(data)
@@ -410,13 +410,13 @@ func TestSlowWriteByte(t *testing.T) {
 func TestClosedRead(t *testing.T) {
 	requireT := require.New(t)
 
-	ring := NewBuffer()
+	ring := New()
 	requireT.NoError(ring.Close())
 	n, err := ring.Read(make([]byte, 1))
 	requireT.ErrorIs(err, io.EOF)
 	requireT.Equal(0, n)
 
-	ring = NewBuffer()
+	ring = New()
 	requireT.NoError(ring.Close())
 	n, err = ring.Read(nil)
 	requireT.ErrorIs(err, io.EOF)
@@ -428,7 +428,7 @@ func TestClosedWriteTo(t *testing.T) {
 
 	buf := &bytes.Buffer{}
 
-	ring := NewBuffer()
+	ring := New()
 	requireT.NoError(ring.Close())
 	n, err := ring.WriteTo(buf)
 	requireT.NoError(err)
@@ -438,13 +438,13 @@ func TestClosedWriteTo(t *testing.T) {
 func TestClosedWrite(t *testing.T) {
 	requireT := require.New(t)
 
-	ring := NewBuffer()
+	ring := New()
 	requireT.NoError(ring.Close())
 	n, err := ring.Write(make([]byte, 1))
 	requireT.ErrorIs(err, io.ErrClosedPipe)
 	requireT.Equal(0, n)
 
-	ring = NewBuffer()
+	ring = New()
 	requireT.NoError(ring.Close())
 	n, err = ring.Write(nil)
 	requireT.ErrorIs(err, io.ErrClosedPipe)
@@ -456,7 +456,7 @@ func TestClosedReadFrom(t *testing.T) {
 
 	buf := bytes.NewBuffer(make([]byte, 1))
 
-	ring := NewBuffer()
+	ring := New()
 	requireT.NoError(ring.Close())
 	n, err := ring.ReadFrom(buf)
 	requireT.ErrorIs(err, io.ErrClosedPipe)
@@ -466,7 +466,7 @@ func TestClosedReadFrom(t *testing.T) {
 func TestClosedReadByte(t *testing.T) {
 	requireT := require.New(t)
 
-	ring := NewBuffer()
+	ring := New()
 	requireT.NoError(ring.Close())
 	v, err := ring.ReadByte()
 	requireT.ErrorIs(err, io.EOF)
@@ -476,7 +476,7 @@ func TestClosedReadByte(t *testing.T) {
 func TestClosedWriteByte(t *testing.T) {
 	requireT := require.New(t)
 
-	ring := NewBuffer()
+	ring := New()
 	requireT.NoError(ring.Close())
 	err := ring.WriteByte(0x00)
 	requireT.ErrorIs(err, io.ErrClosedPipe)
@@ -485,7 +485,7 @@ func TestClosedWriteByte(t *testing.T) {
 func TestClosedIterate(t *testing.T) {
 	requireT := require.New(t)
 
-	ring := NewBuffer()
+	ring := New()
 	requireT.NoError(ring.Close())
 	run := false
 	n, err := ring.Iterate(func(b []byte) (int, bool, error) {
@@ -500,7 +500,7 @@ func TestClosedIterate(t *testing.T) {
 func TestReadToEmpty(t *testing.T) {
 	requireT := require.New(t)
 
-	ring := NewBuffer()
+	ring := New()
 	n, err := ring.Write(make([]byte, 1))
 	requireT.NoError(err)
 	requireT.Equal(1, n)
@@ -513,7 +513,7 @@ func TestReadToEmpty(t *testing.T) {
 func TestWriteFromEmpty(t *testing.T) {
 	requireT := require.New(t)
 
-	ring := NewBuffer()
+	ring := New()
 	n, err := ring.Write(nil)
 	requireT.NoError(err)
 	requireT.Equal(0, n)
@@ -534,7 +534,7 @@ func (rw errReaderWriter) Write(_ []byte) (int, error) {
 func TestReadFromWithError(t *testing.T) {
 	requireT := require.New(t)
 
-	ring := NewBuffer()
+	ring := New()
 	n, err := ring.ReadFrom(errReaderWriter{})
 	requireT.ErrorIs(err, errTest)
 	requireT.Equal(int64(10), n)
@@ -543,7 +543,7 @@ func TestReadFromWithError(t *testing.T) {
 func TestWriteToWithError(t *testing.T) {
 	requireT := require.New(t)
 
-	ring := NewBuffer()
+	ring := New()
 	n, err := ring.Write(make([]byte, 20))
 	requireT.NoError(err)
 	requireT.Equal(20, n)
@@ -556,7 +556,7 @@ func TestWriteToWithError(t *testing.T) {
 func TestIterateWithError(t *testing.T) {
 	requireT := require.New(t)
 
-	ring := NewBuffer()
+	ring := New()
 	_, err := ring.Write([]byte{0x00})
 	requireT.NoError(err)
 

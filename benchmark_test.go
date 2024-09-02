@@ -44,7 +44,7 @@ func BenchmarkCopyRing(b *testing.B) {
 		data := make([]byte, 10*1024) // 10 KiBs of nothing
 		result := make([]byte, len(data))
 
-		ring := NewBuffer()
+		ring := New()
 
 		b.StartTimer()
 		for range loops {
@@ -86,7 +86,7 @@ func BenchmarkPerByteRing(b *testing.B) {
 	const loops = 1000
 
 	for range b.N {
-		ring := NewBuffer()
+		ring := New()
 
 		b.StartTimer()
 		for range loops {
@@ -107,7 +107,7 @@ func BenchmarkIterator(b *testing.B) {
 
 		requireT := require.New(b)
 
-		ring := NewBuffer()
+		ring := New()
 		_, err := ring.Write(make([]byte, count*loops))
 		requireT.NoError(err)
 		requireT.NoError(ring.Close())
@@ -194,7 +194,7 @@ func BenchmarkTCPRing(b *testing.B) {
 		_, err := rand.Read(data)
 		requireT.NoError(err)
 
-		ring := NewBuffer()
+		ring := New()
 
 		l, err := net.Listen("tcp", "localhost:")
 		requireT.NoError(err)
