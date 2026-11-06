@@ -357,7 +357,7 @@ func TestSlowReadByte(t *testing.T) {
 	go func() {
 		defer close(doneCh)
 
-		for range len(data) {
+		for range data {
 			time.Sleep(10 * time.Millisecond)
 			_, err := ring.ReadByte()
 			if err != nil {
